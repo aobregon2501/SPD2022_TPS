@@ -1,39 +1,41 @@
 /*
-TP2 S-
-Campos Alejo
-Oregón Alex
+TP2 SPD 2022 Cerradura
+Campos Alejo, Obregon Alex
 
-EXTRA:
-  -Caracteres custom de cerradura para el display
-    -Servo simulador de pestillo de cerradura
-    -Capacidad de setear tamaño dinamico de la contraseña
-
-TODO:
-    Pulir codigo
-    Agregar doxygen de las funciones
+Extras:
+-Servo para simular pestillo de cerradura
+-Tamaño dinamico de contraseña (respetando el maximo)
+-Caracteres especiales de LCD    
 */
 
 #include <Keypad.h>
 #include <LiquidCrystal.h>
 #include <Servo.h>
 
+//tamaño del teclado matricial
 #define FILAS 4
 #define COLUMNAS 4
+
+//cantidad maxima de caracteres de la contraseña
 #define MAX_CARACTER 7
 
+//pines de los botones
 #define TEST 12
 #define RST A4
 #define SET A5
 
+//pin del servo y angulos de bloqueo y apertura
+#define SERVO 9
 #define LOCK_ON 90
 #define LOCK_OFF 0
 
+//pines de led
 #define LED_OK 10
 #define LED_FAIL 11
 
 
-//***********************SETUP KEYPAD******************************
-
+//***********************SETUP KEYPAD/Botones******************************
+//declaracion e inicializacion del teclado matricial
 char teclado[FILAS][COLUMNAS] = {
   {'1','2','3','A'},
   {'4','5','6','B'},
@@ -45,6 +47,7 @@ byte columnasPins[COLUMNAS] = {3,2,1,0};
 byte filasPins[FILAS] = {7,6,5,4};
 Keypad keypad = Keypad( makeKeymap(teclado), filasPins, columnasPins, FILAS, COLUMNAS );
 
+//variables de estado previo de los botones
 int botonTESTAntes=0;
 int botonRSTAntes=0;
 int botonSETAntes=0;
@@ -52,9 +55,11 @@ int botonSETAntes=0;
 //***********************FIN SETUP KEYPAD******************************
 
 //***********************SETUP LCD******************************
+//inicializacion del display LCD
 const int rs = 13, en = 8, d4 = A0, d5 = A1, d6 = A2, d7 = A3;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
+//Caracter especial cerradura cerrada
 byte lockOn[8]=
 {
   B01110,
@@ -66,7 +71,7 @@ byte lockOn[8]=
     B01110,
     B00000,
 };
-
+//Caracter especial cerradura 
 byte lockOff[8]=
 {
   B01110,
@@ -87,64 +92,66 @@ Servo servoLock;
 
 //***********************FIN SETUP Servo******************************
 
-
-char contra[MAX_CARACTER + 1]= "2C2021";
-char contraIngresada[MAX_CARACTER + 1];
-int cont = 0;
-int comContra;
+char contra[MAX_CARACTER + 1]= "2C2021";  //contra inicial
+char contraIngresada[MAX_CARACTER + 1];   //contra ingresada por el usuario
+int cont = 0;                             //contador de caracteres ingresados
 
 unsigned long prevMillis=0;
 bool flagPrincipal=0;
-
-
-//***********************FUNCIONES******************************
-
-//Compara la contraseña actual con la ingresada y analizasi es correcta o incorrecta
-void imprimirComparacion(char contraI[], int tam);
-
-//Inicia vectores con el caracter nulo '\0'
-void initVector(char vec[], int tam);
-
-//Guarda la nueva contraseña en un vector auxiliar
-void ingresoNuevaContra(char aContra[], int tam);
-
-//Asigna la nueva contraseña al vector de la contraseña actual
-void asignarContra(char nueva[], char actual[], int tam);
-
-//Limpia la pantalla de Display
-void limpiarPantalla();
-
-//Imprime titulos en la pantalla del Display
-void imprimirTitulo(char *titulo, int cChar);
-
-//Analiza el tiempo transcurrido, si el intervalo es el declarado retorna 1, caso contrario retorna 0
-int intervalo(unsigned long *prev,unsigned int tiempo);
-
-//Analiza el estado de los botones de manera individual, utiliza collback para asignar la funcion correspondiente a cada boton
-int estadoBoton(int *estadoPrevio,int *estadoActual, char* contra, int tam,void(*callback)(char*,int));
-
-//Funcion asignada al boton de TEST, al pulsarlo realiza la comparacion de la contraseña actual y la ingresada
-void funcionTEST(char contraI[],int tam);
-
-//Funcion asignada al boton de RST, al pulsarlo reinicia el programa
-void funcionRST(char contraI[],int tam);
-
-//Funcion asignada al boton de SET, al pulsarlo se pide cambiar la contraseña actual
-void funcionSET(char contra[],int tam);
-
-//***********************FIN FUNCIONES******************************
 unsigned int duracion;
 
 
+//paso una string de tamaño tam y lo inicializo en nulo
+void initVector(char vec[], int tam);
+
+//Pide al usuario ingresar ingresar una contraseña nueva hasta alcanzar el maximo de caracteres o hasta que se toque el boton de test 
+void ingresoNuevaContra(char aContra[], int tam);
+
+//Funcion de cambio de contraseña actual por la contraseña pasada como parametro
+void asignarContra(char nueva[], char actual[], int tam);
+
+//Imprime si la contraseña ingresada coincide con la contraseña del sistema
+void imprimirComparacion(char contraI[], int tam);
+
+//borrado del display
+void limpiarPantalla();
+
+//imprime el titulo pasado como parametro junto con un caracter especial de ser requerido
+//Y acomoda el cursor para nuevos ingresos
+void imprimirTitulo(char *titulo, int cChar);
+
+//Funcion que corrobora si el si pasó el tiempo pasado como parametro en milisegundos
+//Si pasó un intervalo mayor o igual a dicho tiempo retorna 1, caso contrario devuelve 0 
+int intervalo(unsigned long *prev,unsigned int tiempo);
+
+//Funcion que analiza el estado del boton y llama a la funcion de callback correspondiente
+void estadoBoton(int *estadoPrevio,int *estadoActual, char* contra, int tam,void(*callback)(char*,int));
+
+//funcion de callback del boton TEST
+//Compara la contraseña ingresada e imprime el resultado y prepara el tiempo para intervalo()
+//Y levanta la bandera principal
+void funcionTEST(char contraI[],int tam);
+
+//funcion de callback del boton RST
+//Reinicializa el vector ingresado por el usuario (contra ingresada) y el resetea 
+//el contador de caracteres a 0
+void funcionRST(char contraI[],int tam);
+
+
+//funcion de callback del boton SET
+//Le pide al usuario una nueva contraseña 
+void funcionSET(char contra[],int tam);
+
+//***********************SETUP******************************
 void setup(){
   pinMode(TEST, INPUT);
-  pinMode(RST, INPUT);
-  pinMode(SET, INPUT);
+  pinMode(TEST, INPUT);
+  pinMode(TEST, INPUT);
   
   pinMode(LED_OK, OUTPUT);  
   pinMode(LED_FAIL, OUTPUT);
   
-  servoLock.attach(9);
+  servoLock.attach(SERVO);
   servoLock.write(LOCK_ON);
   
   initVector(contraIngresada, MAX_CARACTER + 1);
@@ -153,10 +160,11 @@ void setup(){
   lcd.createChar(7,lockOn);
   lcd.createChar(8,lockOff);  
   
-  imprimirTitulo("Password ",7);
-  
+  imprimirTitulo("Password ",7);  
 }
-  
+//***********************FIN SETUP******************************
+
+//***********************LOOP******************************
 void loop(){
   char tecla = keypad.getKey();
   
@@ -189,7 +197,7 @@ void loop(){
     if(intervalo(&prevMillis,duracion))
     {
       imprimirTitulo("Password ",7);
-    flagPrincipal=0;
+      flagPrincipal=0;
       digitalWrite(LED_OK,0);
       digitalWrite(LED_FAIL,0);
       servoLock.write(LOCK_ON);
@@ -199,11 +207,13 @@ void loop(){
   delay(5);
 }
 
+//***********************FIN LOOP******************************
+
 
 void imprimirComparacion(char contraI[], int tam)
 {
   limpiarPantalla();
-  comContra=strcmp(contraI,contra);
+  int comContra=strcmp(contraI,contra);
   if(comContra)
   {
 
@@ -303,7 +313,7 @@ int intervalo(unsigned long *prev,unsigned int tiempo)
   return 0;
 }
   
-int estadoBoton(int *estadoPrevio,int *estadoActual, char* contra, int tam,void(*callback)(char*,int))
+void estadoBoton(int *estadoPrevio,int *estadoActual, char* contra, int tam,void(*callback)(char*,int))
 {
   if(*estadoPrevio == 0&& *estadoActual == 1)
   {
@@ -311,7 +321,6 @@ int estadoBoton(int *estadoPrevio,int *estadoActual, char* contra, int tam,void(
   }
   
   *estadoPrevio = *estadoActual;
-  return 0; 
 }
 
 
